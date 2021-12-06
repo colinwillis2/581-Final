@@ -23,28 +23,9 @@ public class Jar {
     public Resource[][] grabManifests(ResourceCollection[] rcs) {
         Resource[][] manifests = new Resource[rcs.length][];
         for (int i = 0; i < rcs.length; i++) {
-            Resource[][] resources = null;
-            if (rcs[i] instanceof FileSet) {
-                resources = grabResources(new FileSet[] {(FileSet) rcs[i]});
-            } else {
-                resources = grabNonFileSetResources(new ResourceCollection[] {
-                        rcs[i]
-                    });
-            }
+            Resource[][] resources = getResources(rcs, i);
             for (int j = 0; j < resources[0].length; j++) {
-                String name = resources[0][j].getName().replace('\\', '/');
-                if (rcs[i] instanceof ArchiveFileSet) {
-                    ArchiveFileSet afs = (ArchiveFileSet) rcs[i];
-                    if (!"".equals(afs.getFullpath(getProject()))) {
-                        name = afs.getFullpath(getProject());
-                    } else if (!"".equals(afs.getPrefix(getProject()))) {
-                        String prefix = afs.getPrefix(getProject());
-                        if (!prefix.endsWith("/") && !prefix.endsWith("\\")) {
-                            prefix += "/";
-                        }
-                        name = prefix + name;
-                    }
-                }
+                String name = getString(rcs[i], resources[0][j]);
                 if (name.equalsIgnoreCase(MANIFEST_NAME)) {
                     manifests[i] = new Resource[] {resources[0][j]};
                     break;
@@ -55,6 +36,43 @@ public class Jar {
             }
         }
         return manifests;
+    }
+
+    private String getString (ResourceCollection rc, Resource resource)
+    {
+        String name = resource.getName().replace('\\', '/');
+        if (rc instanceof ArchiveFileSet) {
+            ArchiveFileSet afs = (ArchiveFileSet) rc;
+            if (!"".equals(afs.getFullpath(getProject()))) {
+                name = afs.getFullpath(getProject());
+            } else if (!"".equals(afs.getPrefix(getProject()))) {
+                String prefix = getString(afs);
+                name = prefix + name;
+            }
+        }
+        return name;
+    }
+
+    private String getString (ArchiveFileSet afs)
+    {
+        String prefix = afs.getPrefix(getProject());
+        if (!prefix.endsWith("/") && !prefix.endsWith("\\")) {
+            prefix += "/";
+        }
+        return prefix;
+    }
+
+    private Resource[][] getResources (ResourceCollection[] rcs, int i)
+    {
+        Resource[][] resources = null;
+        if (rcs[i] instanceof FileSet) {
+            resources = grabResources(new FileSet[] {(FileSet) rcs[i]});
+        } else {
+            resources = grabNonFileSetResources(new ResourceCollection[] {
+                    rcs[i]
+                });
+        }
+        return resources;
     }
 
     public Project getProject() {
@@ -92,12 +110,7 @@ public class Jar {
     protected Resource[][] grabResources(FileSet[] filesets) {
         Resource[][] result = new Resource[filesets.length][];
         for (int i = 0; i < filesets.length; i++) {
-            boolean skipEmptyNames = true;
-            if (filesets[i] instanceof ZipFileSet) {
-                ZipFileSet zfs = (ZipFileSet) filesets[i];
-                skipEmptyNames = zfs.getPrefix(getProject()).equals("")
-                    && zfs.getFullpath(getProject()).equals("");
-            }
+            boolean skipEmptyNames = isSkipEmptyNames(filesets, i);
             DirectoryScanner rs =
                 filesets[i].getDirectoryScanner(getProject());
             if (rs instanceof ZipScanner) {
@@ -123,5 +136,23 @@ public class Jar {
             resources.copyInto(result[i]);
         }
         return result;
+    }
+
+    private boolean isSkipEmptyNames (FileSet[] filesets, int i)
+    {
+        boolean skipEmptyNames = true;
+        if (filesets[i] instanceof ZipFileSet) {
+            skipEmptyNames = isSkipEmptyNames(filesets[i]);
+        }
+        return skipEmptyNames;
+    }
+
+    private boolean isSkipEmptyNames (FileSet fileset)
+    {
+        boolean skipEmptyNames;
+        ZipFileSet zfs = (ZipFileSet) fileset;
+        skipEmptyNames = zfs.getPrefix(getProject()).equals("")
+            && zfs.getFullpath(getProject()).equals("");
+        return skipEmptyNames;
     }
 }
